@@ -9,5 +9,6 @@ namespace TomComm
 	public class Response
 	{
 		public SortedList<string, object> Parameters { get; set; }
+		public SortedList<string, object> Body;
 	}
 }

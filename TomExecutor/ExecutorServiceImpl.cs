@@ -10,13 +10,18 @@ namespace TomExecutor
 	{
 		#region IExecutorService 成员
 
-		public void PushRequest(TomComm.Request request)
+		public void PushRequest(EventArgs request)
 		{
-			RequestQueue.Push(request);
+			if (!Program.Server.IsStop)
+			{
+				RequestQueue.Push(request);
+				Program.Server.Set();
+			}
 		}
 
 		public void Shutdown()
 		{
+			Program.Server.Stop();
 		}
 
 		#endregion

@@ -11,7 +11,7 @@ namespace TomExecutorServiceContract
 	public interface IExecutorService
 	{
 		[OperationContract]
-		void PushRequest(Request request);
+		void PushRequest(EventArgs request);
 
 		[OperationContract]
 		void Shutdown();

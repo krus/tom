@@ -33,6 +33,13 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="RabbitMQ.Client, Version=3.2.3.0, Culture=neutral, PublicKeyToken=89e7d7c5feba84ce, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\libs\RabbitMQClient\RabbitMQ.Client.dll</HintPath>
+    </Reference>
+    <Reference Include="RabbitMQ.ServiceModel">
+      <HintPath>..\libs\RabbitMQClient\RabbitMQ.ServiceModel.dll</HintPath>
+    </Reference>
     <Reference Include="SmartThreadPool">
       <HintPath>..\libs\SmartThreadPool.dll</HintPath>
     </Reference>
@@ -46,10 +53,12 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Executor.cs" />
     <Compile Include="ExecutorServiceImpl.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RequestQueue.cs" />
+    <Compile Include="Server.cs" />
     <Compile Include="Task.cs" />
     <Compile Include="WorkerServiceClient.cs" />
   </ItemGroup>

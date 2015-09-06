@@ -15,7 +15,7 @@ namespace TomWorker
 
 		#region IExecutorService 成员
 
-		public void PushRequest(TomComm.Request request)
+		public void PushRequest(EventArgs request)
 		{
 			base.Channel.PushRequest(request);
 		}

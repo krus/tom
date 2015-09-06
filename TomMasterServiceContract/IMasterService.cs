@@ -11,6 +11,6 @@ namespace TomMasterServiceContract
 	public interface IMasterService
 	{
 		[OperationContract]
-		WorkerInfo AcquireWorker(int nodeId);
+		WorkerInfo AcquireWorker(int hostId);
 	}
 }

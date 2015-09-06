@@ -31,7 +31,7 @@ namespace TomWorker
 					return executor;
 				}
 
-				ServiceElement element = Context.Current.ServiceConfig.Services.FindServiceElement(serviceName);
+				ServiceNode element = null;
 				if (element == null)
 				{
 					throw new  Exception("未找到服务配置");
@@ -54,13 +54,13 @@ namespace TomWorker
 		private string serviceDirectory;
 		private string serviceName;
 
-		public void PushRequest(Request request)
+		public void PushRequest(EventArgs request)
 		{
 			ExecutorServiceClient client = new ExecutorServiceClient();
 			client.PushRequest(request);
 		}
 
-		public void Start()
+		private void Start()
 		{
 			if (process == null)
 			{
@@ -70,7 +70,7 @@ namespace TomWorker
 			}
 		}
 
-		public void Shutdown()
+		private void Shutdown()
 		{
 			if (process != null)
 			{

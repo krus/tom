@@ -9,16 +9,16 @@ namespace TomExecutor
 {
 	internal class RequestQueue
 	{
-		static Queue<Request> s_Queue;
+		static Queue<EventArgs> s_Queue;
 		static object s_SyncRoot;
 
 		static RequestQueue()
 		{
-			s_Queue = new Queue<Request>();
+			s_Queue = new Queue<EventArgs>();
 			s_SyncRoot = (s_Queue as ICollection).SyncRoot;
 		}
 
-		public static void Push(Request request)
+		public static void Push(EventArgs request)
 		{
 			lock (s_SyncRoot)
 			{
@@ -26,7 +26,7 @@ namespace TomExecutor
 			}
 		}
 
-		public static Request Pop()
+		public static EventArgs Pop()
 		{
 			lock (s_SyncRoot)
 			{

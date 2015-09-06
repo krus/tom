@@ -15,9 +15,9 @@ namespace TomWorker
 
 		#region IMasterService 成员
 
-		public TomMasterServiceContract.Entities.WorkerInfo AcquireWorker(int nodeId)
+		public TomMasterServiceContract.Entities.WorkerInfo AcquireWorker(int hostId)
 		{
-			return base.Channel.AcquireWorker(nodeId);
+			return base.Channel.AcquireWorker(hostId);
 		}
 
 		#endregion

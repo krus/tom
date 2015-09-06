@@ -12,7 +12,7 @@ namespace TomWorker
 		private string workerServieName;
 
 		public int WorkerId { get; set; }
-		public int NodeId { get; set; }
+		public int HostId { get; set; }
 		public string MQUri { get; set; }
 		public string ExecutorPath { get; set; }
 		public string WorkerServieName { get; set; }
@@ -21,12 +21,12 @@ namespace TomWorker
 		public int MaxTasks { get; set; }
 		public int MaxExecutors { get; set; }
 		public int Executors { get; set; }
-		public TomWorkerSection ServiceConfig { get; private set; }
+		public ServiceConfig ServiceConfig { get; private set; }
 
 
 		private Context()
 		{
-			this.ServiceConfig = (TomWorkerSection)System.Configuration.ConfigurationManager.GetSection("tomWorker");
+			this.ServiceConfig = (ServiceConfig)System.Configuration.ConfigurationManager.GetSection("tomWorker");
 		}
 
 		private static Context s_CurrentContext;
