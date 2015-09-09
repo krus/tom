@@ -9,6 +9,7 @@ namespace TomWorkerServiceContract
 	[ServiceContract(Name = "WorkerService", Namespace = "http://www.3c.org/")]
 	public interface IWorkerService
 	{
+		[OperationContract]
 		void Complete(string serviceName);
 	}
 }

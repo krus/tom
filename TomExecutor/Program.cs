@@ -11,16 +11,19 @@ namespace TomExecutor
 {
 	class Program
 	{
-		public static Server Server { get; private set; }
+		public static Executor Server { get; private set; }
 		static void Main(string[] args)
 		{
-			string serviceDirectory = args[0];
-			int workerServicePort = Convert.ToInt32(args[1]);
-			int executorServicePort = Convert.ToInt32(args[2]);
-			string executorServiceIP = args[3];
-			string executorServiceName = args[4];
+			//args = @"test.test E:\project\Tom\Test\testbin 1800 18001 192.168.20.133 Executor_18001 amqp://test:test@115.29.236.46:5672".Split(' ');
+			string serviceName = args[0];
+			string serviceDirectory = args[1];
+			int workerServicePort = Convert.ToInt32(args[2]);
+			int executorServicePort = Convert.ToInt32(args[3]);
+			string executorServiceIP = args[4];
+			string executorServiceName = args[5];
+			string mqUri = args[6];
 
-			Server = new Server(serviceDirectory, workerServicePort, executorServiceName, executorServiceIP, executorServicePort);
+			Server = new Executor(serviceName, serviceDirectory, workerServicePort, executorServiceName, executorServiceIP, executorServicePort, mqUri);
 			Server.Start();
 		}
 

@@ -6,7 +6,7 @@
     <ProductVersion>8.0.30703</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>{C3BBFB43-BFD7-429C-A485-3B9DBB45946D}</ProjectGuid>
-    <OutputType>WinExe</OutputType>
+    <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>TomWorker</RootNamespace>
     <AssemblyName>TomWorker</AssemblyName>
@@ -32,9 +32,19 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
+  <PropertyGroup>
+    <StartupObject />
+  </PropertyGroup>
   <ItemGroup>
+    <Reference Include="LiveTK">
+      <HintPath>..\libs\LiveTK.dll</HintPath>
+    </Reference>
     <Reference Include="log4net">
       <HintPath>..\libs\log4net.dll</HintPath>
+    </Reference>
+    <Reference Include="MySql.Data, Version=6.5.4.0, Culture=neutral, PublicKeyToken=c5687fc88969c44d, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\libs\MySql.Data.dll</HintPath>
     </Reference>
     <Reference Include="RabbitMQ.Client, Version=3.2.3.0, Culture=neutral, PublicKeyToken=89e7d7c5feba84ce, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
@@ -54,14 +64,15 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Configuration\ServiceElement.cs" />
-    <Compile Include="Configuration\ServiceElementCollection.cs" />
-    <Compile Include="Configuration\TomWorkerSection.cs" />
-    <Compile Include="Context.cs" />
+    <Compile Include="Configuration\ServiceNode.cs" />
+    <Compile Include="Configuration\ServiceNodeCollection.cs" />
+    <Compile Include="Configuration\ServiceConfig.cs" />
+    <Compile Include="Consts.cs" />
     <Compile Include="Executor.cs" />
     <Compile Include="ExecutorServiceClient.cs" />
     <Compile Include="MasterServiceClient.cs" />
     <Compile Include="NetPort.cs" />
+    <Compile Include="Worker.cs" />
     <Compile Include="WinService.cs">
       <SubType>Component</SubType>
     </Compile>

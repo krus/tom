@@ -48,10 +48,21 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="read.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TomComm\TomComm.csproj">
+      <Project>{D63FCEAE-C208-4A0E-AA5A-7AB263EB787F}</Project>
+      <Name>TomComm</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TomRPCClient\TomRPCClient.csproj">
+      <Project>{059A3859-FD3D-4DD8-BBF9-F3CF2BE45C4D}</Project>
+      <Name>TomRPCClient</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

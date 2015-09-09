@@ -17,69 +17,77 @@ using TomComm;
 using System.IO;
 using RabbitMQ.Client.Impl;
 using RabbitMQ.Client.Content;
+using TomWorker.Configuration;
+using LiveTK.Data;
 
 namespace TomWorker
 {
-	public class Server
+	public class Worker
 	{
 		private static log4net.ILog LOG = log4net.LogManager.GetLogger("Server");
-		const string ExchangeName = "amq.direct";
+
+		public static string ExecutorFileName { get; private set; }
+		public static string WorkerServiceIP { get; private set; }
+		public static int WorkerServicePort { get; private set; }
+		public static int MaxTasks { get; private set; }
+
+		static Worker()
+		{
+			ExecutorFileName = System.Configuration.ConfigurationManager.AppSettings["TomExecutorFileName"];
+			WorkerServiceIP = System.Configuration.ConfigurationManager.AppSettings["TomWorkerServiceIP"];
+
+			int maxTasks;
+			int.TryParse(System.Configuration.ConfigurationManager.AppSettings["TomMaxTasks"], out maxTasks);
+
+			int workerServicePort;
+			if(int.TryParse(System.Configuration.ConfigurationManager.AppSettings["TomWorkerServicePort"], out workerServicePort))
+			{
+				WorkerServicePort = workerServicePort;
+			}
+		}
+
 
 		private Thread thread;
 		private ConnectionFactory connectFactory;
 		private bool isStop;
 		private string queueName;
+		private string workerServiceName;
+		private int appId;
+		private int workerId;
+		public string MQUri { get; private set; }
+		private BinaryFormatter binaryFormatter = new BinaryFormatter();
+
+		public Worker(int appId)
+		{
+			this.appId = appId;
+		}
 
 		public void Start()
 		{
 			connectFactory = new ConnectionFactory();
 
-			int hostId = 0;
 			int workerId = 0;
 			int maxTasks = 0;
 			int maxExecutors;
-			string executorPath = System.Configuration.ConfigurationManager.AppSettings["ExecutorPath"];
-			string workerServiceIP = System.Configuration.ConfigurationManager.AppSettings["WorkerServiceIP"];
 
-			int.TryParse(System.Configuration.ConfigurationManager.AppSettings["MaxTasks"], out maxTasks);
-			int.TryParse(System.Configuration.ConfigurationManager.AppSettings["MaxExecutors"], out maxExecutors);
-			int.TryParse(System.Configuration.ConfigurationManager.AppSettings["HostId"], out hostId);
-
-			if (maxTasks == 0)
+			if (appId == 0)
 			{
-				LOG.Error("最大执行任务数配置错误");
-				return;
-			}
-
-			if (maxExecutors == 0)
-			{
-				LOG.Error("最大任务分配进程数配置错误");
-				return;
-			}
-
-			if (hostId == 0)
-			{
-				LOG.Error("主机ID配置错误");
+				LOG.Error("应用ID配置错误");
 				return;
 			}
 
 			WorkerInfo workerInfo = null;
-			using (MasterServiceClient client = new MasterServiceClient())
+			using (MasterServiceClient client = new MasterServiceClient(Consts.TomMasterServiceEndpointConfig))
 			{
-				workerInfo = client.AcquireWorker(hostId);
+				workerInfo = client.AcquireWorker(appId);
 			}
 
-			Context.Current.WorkerId = workerId;
-			Context.Current.HostId = hostId;
-			Context.Current.MaxExecutors = maxExecutors;
-			Context.Current.MaxTasks = maxTasks;
-			Context.Current.WorkerServiceIP = workerServiceIP;
-			Context.Current.WorkerServicePort = workerInfo.WorkerServicePort;
-			Context.Current.WorkerServieName = workerInfo.WorkerServiceName;
-			Context.Current.MQUri = workerInfo.MQUri;
+			this.workerId = workerId;
+			this.workerServiceName = "WorkerServiceName_" + this.workerId;
+			this.MQUri = workerInfo.MQUri;
+			this.queueName = "tom.host." + appId;
 
-			this.queueName = "tom.host." + hostId;
-
+			this.InitConfig();
 			this.OpenWorkerService();
 			this.StartThread();
 		}
@@ -87,6 +95,11 @@ namespace TomWorker
 		public void Stop()
 		{
 			this.StopThread();
+		}
+
+		private void InitConfig()
+		{
+			this.config = ServiceConfig.GetConfig(appId);
 		}
 
 		private void OpenWorkerService()
@@ -97,7 +110,7 @@ namespace TomWorker
 			using (ServiceHost host = new ServiceHost(typeof(WorkerServiceImpl)))
 			{
 				host.AddServiceEndpoint(typeof(IWorkerService), binding,
-					new Uri(string.Format("net.tcp://{0}:{1}/{2}", Context.Current.WorkerServiceIP, Context.Current.WorkerServicePort, Context.Current.WorkerServieName)));
+					new Uri(string.Format("net.tcp://{0}:{1}/{2}", WorkerServiceIP, WorkerServicePort, this.workerServiceName)));
 
 				if (host.State != CommunicationState.Opening)
 					host.Open();
@@ -113,13 +126,12 @@ namespace TomWorker
 
 		private void StopThread()
 		{
-
 		}
 
 		private void Proc()
 		{
 			ConnectionFactory factory = new ConnectionFactory();
-			factory.Uri = Context.Current.MQUri;
+			factory.Uri = this.MQUri;
 			IConnection conn = factory.CreateConnection();
 			IModel ch = conn.CreateModel();
 			ch.QueueDeclare(this.queueName, false, false, false, null);
@@ -130,15 +142,26 @@ namespace TomWorker
 			while (!this.isStop)
 			{
 				BasicDeliverEventArgs args = consumer.Queue.Dequeue();
-				IBasicProperties props = args.BasicProperties;
-				string serviceName = props.Headers["ServiceName"].ToString();
 
-				byte[] body = args.Body;
+				Request request;
+				using(MemoryStream mem = new MemoryStream(args.Body))
+				{
+					request = (Request)binaryFormatter.Deserialize(mem);
+					request.DeliveryTag = args.DeliveryTag;
+				}
 
-				executor = Executor.Run(serviceName);
+				string serviceName = request.ServiceName;
+
+
+				ServiceNode node = config.ServiceNodes.Find(serviceName);
+				if (node != null)
+				{
+					executor = Executor.Run(this, node);
+				}
+
 				if (executor != null)
 				{
-					executor.PushRequest(args);
+					executor.PushRequest(request);
 				}
 				else
 				{
@@ -153,8 +176,8 @@ namespace TomWorker
 					}
 
 					IBasicProperties responseProps = ch.CreateBasicProperties();
-					responseProps.CorrelationId = props.CorrelationId;
-					ch.BasicPublish(ExchangeName, props.ReplyTo, responseProps, bytes);
+					responseProps.CorrelationId = request.CorrelationId;
+					ch.BasicPublish(string.Empty, request.ReplyTo, responseProps, bytes);
 
 					LOG.Warn("未找到请求处理服务：" + serviceName);
 				}
@@ -165,5 +188,7 @@ namespace TomWorker
 			conn.Close();
 			ch.Close();
 		}
+
+		private ServiceConfig config;
 	}
 }

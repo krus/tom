@@ -8,10 +8,10 @@ namespace TomComm
 	[AttributeUsage(AttributeTargets.Method)]
 	public class TomServiceAttribute : Attribute
 	{
-		private string serviceName;
+		public string ServiceName{get;private set;}
 		public TomServiceAttribute(string serviceName)
 		{
-			this.serviceName = serviceName;
+			this.ServiceName = serviceName;
 		}
 	}
 }

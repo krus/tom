@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using TomExecutorServiceContract;
+using System.IO;
+using System.Runtime.Serialization.Formatters.Binary;
+using TomComm;
 
 namespace TomExecutor
 {
@@ -10,7 +13,7 @@ namespace TomExecutor
 	{
 		#region IExecutorService 成员
 
-		public void PushRequest(EventArgs request)
+		public void PushRequest(Request request)
 		{
 			if (!Program.Server.IsStop)
 			{

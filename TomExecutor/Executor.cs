@@ -2,87 +2,140 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.ServiceModel;
+using TomExecutorServiceContract;
+using Amib.Threading;
+using System.Threading;
+using RabbitMQ.Client;
+using RabbitMQ.Client.Events;
 using TomComm;
-using System.Collections;
 using System.IO;
-using System.Reflection;
+using System.Runtime.Serialization.Formatters.Binary;
 
 namespace TomExecutor
 {
-	public class Executor
+	public class Executor : IDisposable
 	{
-		private static Dictionary<string, Executor> s_Executors = new Dictionary<string, Executor>();
-		private static object s_SyncRoot;
-		static Executor()
-		{
-			s_SyncRoot = (s_Executors as ICollection).SyncRoot;
-		}
-
-		public static Executor TryGetExecutor(string serviceName, string serviceDirectory)
-		{
-			Executor executor;
-			lock (s_SyncRoot)
-			{
-				if (s_Executors.TryGetValue(serviceName, out executor))
-				{
-					return executor;
-				}
-
-				executor = new Executor(serviceName, serviceDirectory);
-				executor.LoadAssembly();
-				executor.WatchFile();
-
-				s_Executors.Add(serviceName, executor);
-
-				return executor;
-			}
-		}
+		const string ExchangeName = "amq.direct";
+		public bool IsStop { set; get; }
+		private SmartThreadPool smartThreadPool;
 
 		private string serviceName;
 		private string serviceDirectory;
-		private AppDomain appDomain;
-		private Executor(string serviceName, string serviceDirectory)
+		private int workerServicePort;
+		private string executorServiceName;
+		private string executorServiceIP;
+		private int executorServicePort;
+		private string mqUri;
+		
+		private AutoResetEvent sign;
+
+		private ConnectionFactory factory;
+		private IModel ch;
+		private IConnection conn;
+		private BinaryFormatter binaryFormatter;
+
+		private ServiceHost host;
+
+		public Executor(string serviceName, string serviceDirectory, int workerServicePort, string executorServiceName, string executorServiceIP, int executorServicePort, string mqUri)
 		{
 			this.serviceName = serviceName;
 			this.serviceDirectory = serviceDirectory;
+			this.workerServicePort = workerServicePort;
+			this.executorServiceName = executorServiceName;
+			this.executorServiceIP = executorServiceIP;
+			this.executorServicePort = executorServicePort;
+			this.mqUri = mqUri;
+
+			this.binaryFormatter = new BinaryFormatter();
+			this.sign = new AutoResetEvent(false);
 		}
 
-		public object Execute(Request request)
+		public void Start()
 		{
-			return null;
-		}
+			factory = new ConnectionFactory();
+			factory.Uri = this.mqUri;
+			conn = factory.CreateConnection();
+			ch = conn.CreateModel();
 
-		private void WatchFile()
-		{
+			OpenExecuterService(executorServiceIP, executorServicePort, executorServiceName);
 
-		}
-
-		private void LoadAssembly()
-		{
-			string[] fileNames = Directory.GetFiles("*.dll");
-			foreach (string fileName in fileNames)
+			smartThreadPool = new SmartThreadPool(new STPStartInfo()
 			{
-				Assembly assembly = Assembly.LoadFile(fileName);
-				Type[] types = assembly.GetTypes();
-				foreach (Type type in types)
-				{
-					MethodInfo[] methods = type.GetMethods();
-					foreach (MethodInfo method in methods)
-					{
-					}
-				}
+				MinWorkerThreads = 3,
+				MaxWorkerThreads = 10
+			});
 
+			while (!IsStop)
+			{
+				sign.WaitOne();
+
+				if (RequestQueue.Count > 0)
+				{
+					Request req = RequestQueue.Pop();
+					smartThreadPool.QueueWorkItem(WorkCallback, req);
+				}
 			}
 		}
 
-		private void CreateAppDomain()
+		private object WorkCallback(object state)
 		{
-			AppDomainSetup setup = new AppDomainSetup();
-			setup.ApplicationName = this.serviceName;
-			setup.PrivateBinPath = this.serviceDirectory;
-			appDomain = AppDomain.CreateDomain(serviceName, null, setup);
+			Request request = (Request)state;
 
-			appDomain
+			byte[] bytes = null;
+			Task task = Task.TryGetTask(serviceName, serviceDirectory);
+			object objRet = task.Run(request);
+			if (objRet != null)
+			{
+				using (MemoryStream mem = new MemoryStream())
+				{
+					binaryFormatter.Serialize(mem, objRet);
+					bytes = mem.ToArray();
+				}
+			}
+
+			IBasicProperties responseProps = ch.CreateBasicProperties();
+			responseProps.CorrelationId = request.CorrelationId;
+			ch.BasicPublish(string.Empty, request.ReplyTo, responseProps, bytes);
+			ch.BasicAck(request.DeliveryTag, false);
+			return null;
 		}
+
+		public void Set()
+		{
+			sign.Set();
+		}
+
+		public void Stop()
+		{
+			IsStop = true;
+			sign.Set();
+		}
+
+		private void OpenExecuterService(string ip, int port, string serviceName)
+		{
+			NetTcpBinding binding = new NetTcpBinding(SecurityMode.None);
+			binding.Security.Mode = SecurityMode.None;
+
+			host = new ServiceHost(typeof(ExecutorServiceImpl));
+			host.AddServiceEndpoint(typeof(IExecutorService), binding,
+				new Uri(string.Format("net.tcp://{0}:{1}/{2}", ip, port, serviceName)));
+
+			if (host.State != CommunicationState.Opening)
+				host.Open();
+		}
+
+		#region IDisposable 成员
+
+		public void Dispose()
+		{
+			conn.Close();
+			ch.Dispose();
+			host.Close();
+		}
+
+		#endregion
 	}
+
+	
 }

@@ -13,12 +13,33 @@ namespace TomWorker
 		/// </summary>
 		static void Main()
 		{
+			MainConsole.Start();
+
+
 			ServiceBase[] ServicesToRun;
 			ServicesToRun = new ServiceBase[] 
 			{ 
 				new WinService() 
 			};
 			ServiceBase.Run(ServicesToRun);
+		}
+	}
+
+
+	class MainConsole
+	{
+		public static void Start()
+		{
+
+			log4net.Config.DOMConfigurator.Configure();
+
+			int hostId;
+			int.TryParse(System.Configuration.ConfigurationManager.AppSettings["TomHostId"], out hostId);
+
+			Worker worker = new Worker(hostId);
+			worker.Start();
+
+			System.Console.Read();
 		}
 	}
 }

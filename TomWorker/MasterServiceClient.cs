@@ -9,15 +9,25 @@ namespace TomWorker
 {
 	public class MasterServiceClient : ClientBase<IMasterService>,IMasterService
 	{
-		public MasterServiceClient()
+		public MasterServiceClient(string endpointConfigurationName) : base(endpointConfigurationName)
 		{
 		}
 
 		#region IMasterService 成员
 
-		public TomMasterServiceContract.Entities.WorkerInfo AcquireWorker(int hostId)
+		public TomMasterServiceContract.Entities.WorkerInfo AcquireWorker(int appId)
 		{
-			return base.Channel.AcquireWorker(hostId);
+			return base.Channel.AcquireWorker(appId);
+		}
+
+		#endregion
+
+		#region IMasterService 成员
+
+
+		public void Heartbeat(int appId)
+		{
+			base.Channel.Heartbeat(appId);
 		}
 
 		#endregion

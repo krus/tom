@@ -11,6 +11,8 @@ namespace TomMasterServiceContract
 	public interface IMasterService
 	{
 		[OperationContract]
-		WorkerInfo AcquireWorker(int hostId);
+		WorkerInfo AcquireWorker(int appId);
+
+		void Heartbeat(int appId);
 	}
 }

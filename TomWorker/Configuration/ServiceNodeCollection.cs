@@ -9,12 +9,17 @@ namespace TomWorker.Configuration
 	public sealed class ServiceNodeCollection
 	{
 		private Dictionary<string, ServiceNode> services = new Dictionary<string,ServiceNode>();
-		
-		public ServiceNode FindServiceElement(string name)
+
+		public void Add(ServiceNode node)
 		{
-			ServiceNode element = null;
-			services.TryGetValue(name, out element);
-			return element;
+			services.Add(node.Name, node);
+		}
+
+		public ServiceNode Find(string name)
+		{
+			ServiceNode node = null;
+			services.TryGetValue(name, out node);
+			return node;
 		}
 	}
 }

@@ -22,7 +22,7 @@ namespace TomWorker
 	{
 		private static log4net.ILog LOG = log4net.LogManager.GetLogger("WinService");
 
-		private Server server;
+		private Worker worker;
 		public WinService()
 		{
 			InitializeComponent();
@@ -32,13 +32,16 @@ namespace TomWorker
 		{
 			log4net.Config.DOMConfigurator.Configure();
 
-			server = new Server();
-			server.Start();
+			int hostId;
+			int.TryParse(System.Configuration.ConfigurationManager.AppSettings["TomHostId"], out hostId);
+
+			worker = new Worker(hostId);
+			worker.Start();
 		}
 
 		protected override void OnStop()
 		{
-			server.Stop();
+			worker.Stop();
 		}
 	}
 }
