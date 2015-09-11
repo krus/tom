@@ -45,7 +45,7 @@ namespace TomExecutor
 			this.appDomain = MyAppDomain.Acquried(serviceDirectory);
 		}
 
-		public object Run(Request request)
+		public object Execute(Request request)
 		{
 			try
 			{

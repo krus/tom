@@ -30,15 +30,12 @@ namespace TomWorker
 	{
 		public static void Start()
 		{
-
 			log4net.Config.DOMConfigurator.Configure();
 
-			int hostId;
-			int.TryParse(System.Configuration.ConfigurationManager.AppSettings["TomHostId"], out hostId);
+			int appId;
+			int.TryParse(System.Configuration.ConfigurationManager.AppSettings["TomAppId"], out appId);
 
-			Worker worker = new Worker(hostId);
-			worker.Start();
-
+			Worker worker = new Worker(appId);
 			System.Console.Read();
 		}
 	}

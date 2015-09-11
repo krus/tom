@@ -4,26 +4,37 @@ using System.Linq;
 using System.Text;
 using TomMasterServiceContract;
 using TomMasterServiceContract.Entities;
+using LiveTK.Data;
 
 namespace TomMaster
 {
 	public class MasterServiceImpl : IMasterService
 	{
+		static MySqlDBAccess DB = new MySqlDBAccess(MySqlDBAccess.GetConnectString(System.Configuration.ConfigurationManager.AppSettings["TomDBConnectName"]));
+
 		#region IMasterService 成员
 
-		public WorkerInfo AcquireWorker(int hostId)
+		public WorkerInfo AcquireWorker(int appId)
 		{
+			object objMQUri = DB.ExecuteScalar("select mquri from tom_apps where appid=" + appId);
+			if (objMQUri == null || objMQUri == DBNull.Value)
+			{
+				return null;
+			}
+
+			int workerId = (int)DB.InsertData(string.Format("insert into tom_app_workers(AppId,Status,Created) value({0},1,sysdate())", appId), null);
 			WorkerInfo info = new WorkerInfo();
-			info.MQUri = "amqp://test:test@115.29.236.46:5672";
-			info.WorkerId = 1;
-			info.WorkerServiceName = "WorkerServiceName_" + hostId;
-			info.WorkerServicePort = 1188;
+			info.MQUri = objMQUri.ToString();
+			info.WorkerId = workerId;
+			info.WorkerServiceName = "WorkerServiceName_" + info.WorkerId;
+			info.QueueName = "tom.app." + appId;
 			return info;
 		}
 
-		#endregion
+		public void CloseWorker(int workerId)
+		{
 
-		#region IMasterService 成员
+		}
 
 
 		public void Heartbeat(int workerId)

@@ -19,6 +19,7 @@ namespace TomWorker.Configuration
 			foreach (DataRow dr in dt.Rows)
 			{
 				ServiceNode node = new ServiceNode();
+				node.AppId = appId;
 				node.Name = dr["Code"].ToString();
 				node.BinDirectory = dr["BinPath"].ToString();
 

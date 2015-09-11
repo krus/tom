@@ -19,6 +19,7 @@ using RabbitMQ.Client.Impl;
 using RabbitMQ.Client.Content;
 using TomWorker.Configuration;
 using LiveTK.Data;
+using System.Collections;
 
 namespace TomWorker
 {
@@ -28,64 +29,85 @@ namespace TomWorker
 
 		public static string ExecutorFileName { get; private set; }
 		public static string WorkerServiceIP { get; private set; }
-		public static int WorkerServicePort { get; private set; }
 		public static int MaxTasks { get; private set; }
+		public static int MaxExecutors { get; private set; }
+		public static Dictionary<int, Worker> s_Workers;
+		public static byte[] NotFoundResponseBody{ get; private set; }
 
 		static Worker()
 		{
+			MaxExecutors = 20;
 			ExecutorFileName = System.Configuration.ConfigurationManager.AppSettings["TomExecutorFileName"];
 			WorkerServiceIP = System.Configuration.ConfigurationManager.AppSettings["TomWorkerServiceIP"];
 
 			int maxTasks;
 			int.TryParse(System.Configuration.ConfigurationManager.AppSettings["TomMaxTasks"], out maxTasks);
 
-			int workerServicePort;
-			if(int.TryParse(System.Configuration.ConfigurationManager.AppSettings["TomWorkerServicePort"], out workerServicePort))
+			s_Workers = new Dictionary<int, Worker>();
+
+			NotFoundResponseBody = CreateNotFoundResonseBody();
+		}
+
+		static byte[] CreateNotFoundResonseBody()
+		{
+			byte[] bytes = null;
+			Response response = new Response();
+			response.Status = 404;
+
+			BinaryFormatter binaryFormatter = new BinaryFormatter();
+			using (MemoryStream mem = new MemoryStream())
 			{
-				WorkerServicePort = workerServicePort;
+				binaryFormatter.Serialize(mem, response);
+				bytes = mem.ToArray();
 			}
+			return bytes;
 		}
 
 
 		private Thread thread;
-		private ConnectionFactory connectFactory;
+		private ConnectionFactory factory;
 		private bool isStop;
 		private string queueName;
-		private string workerServiceName;
+		
 		private int appId;
 		private int workerId;
-		public string MQUri { get; private set; }
+		private NetPort workerServiceNetPort = new NetPort(17000);
+		
 		private BinaryFormatter binaryFormatter = new BinaryFormatter();
+		private ServiceConfig config;
+		private IList<Executor> executors;
+		private object executorSyncRoot;
+		private int executorIndex;
+
+		public string WorkerServiceName{get;private set;}
+		public int WorkerServicePort { get; private set; }
+		public string MQUri { get; private set; }
 
 		public Worker(int appId)
 		{
 			this.appId = appId;
+			this.executors = new List<Executor>(MaxExecutors);
+			this.executorSyncRoot = (this.executors as ICollection).SyncRoot;
+			this.Init();
 		}
 
-		public void Start()
+		private void Init()
 		{
-			connectFactory = new ConnectionFactory();
-
-			int workerId = 0;
-			int maxTasks = 0;
-			int maxExecutors;
-
-			if (appId == 0)
-			{
-				LOG.Error("应用ID配置错误");
-				return;
-			}
-
 			WorkerInfo workerInfo = null;
 			using (MasterServiceClient client = new MasterServiceClient(Consts.TomMasterServiceEndpointConfig))
 			{
 				workerInfo = client.AcquireWorker(appId);
 			}
 
-			this.workerId = workerId;
-			this.workerServiceName = "WorkerServiceName_" + this.workerId;
+			this.workerId = workerInfo.WorkerId;
+			this.WorkerServiceName = workerInfo.WorkerServiceName;
+			this.queueName = workerInfo.QueueName;
 			this.MQUri = workerInfo.MQUri;
-			this.queueName = "tom.host." + appId;
+
+			factory = new ConnectionFactory();
+			factory.Uri = workerInfo.MQUri;
+
+			s_Workers.Add(this.workerId, this);
 
 			this.InitConfig();
 			this.OpenWorkerService();
@@ -95,11 +117,80 @@ namespace TomWorker
 		public void Stop()
 		{
 			this.StopThread();
+			this.KillAllExecutor();
+		}
+
+		private void KillAllExecutor()
+		{
+			Executor[] arr = this.executors.ToArray<Executor>();
+			foreach (Executor executor in arr)
+			{
+				executor.Kill();
+			}
+		}
+
+		public void OnExecutorExit(Executor executor)
+		{
+			lock (executorSyncRoot)
+			{
+				this.executors.Remove(executor);
+			}
+		}
+
+		public void ReLoadConfig()
+		{
+			this.InitConfig();
 		}
 
 		private void InitConfig()
 		{
 			this.config = ServiceConfig.GetConfig(appId);
+		}
+
+		private Executor AcquriedExecutor(ServiceNode node)
+		{
+			Executor executor = null;
+			if (this.executors.Count >= MaxExecutors)
+			{
+				while (this.executors.Count == 0)
+				{
+					int index = executorIndex;
+					if (index >= this.executors.Count)
+					{
+						index = 0;
+					}
+					else
+					{
+						index++;
+					}
+					executorIndex = index;
+
+					lock (executorSyncRoot)
+					{
+						executor = this.executors[index];
+					}
+
+					if (executor.Ping())
+					{
+						return executor;
+					}
+					else
+					{
+						lock (executorSyncRoot)
+						{
+							this.executors.Remove(executor);
+						}
+					}
+				}
+			}
+
+			executor = new Executor(this, node.AppId, node.BinDirectory);
+			executor.Start();
+			lock (executorSyncRoot)
+			{
+				executors.Add(executor);
+			}
+			return executor;
 		}
 
 		private void OpenWorkerService()
@@ -109,8 +200,9 @@ namespace TomWorker
 
 			using (ServiceHost host = new ServiceHost(typeof(WorkerServiceImpl)))
 			{
+				this.WorkerServicePort = this.workerServiceNetPort.AcquriedPort();
 				host.AddServiceEndpoint(typeof(IWorkerService), binding,
-					new Uri(string.Format("net.tcp://{0}:{1}/{2}", WorkerServiceIP, WorkerServicePort, this.workerServiceName)));
+					new Uri(string.Format("net.tcp://{0}:{1}/{2}", WorkerServiceIP, this.WorkerServicePort, this.WorkerServiceName)));
 
 				if (host.State != CommunicationState.Opening)
 					host.Open();
@@ -126,69 +218,59 @@ namespace TomWorker
 
 		private void StopThread()
 		{
+
 		}
 
 		private void Proc()
 		{
-			ConnectionFactory factory = new ConnectionFactory();
-			factory.Uri = this.MQUri;
-			IConnection conn = factory.CreateConnection();
-			IModel ch = conn.CreateModel();
-			ch.QueueDeclare(this.queueName, false, false, false, null);
-			QueueingBasicConsumer consumer = new QueueingBasicConsumer(ch);
-			ch.BasicConsume(this.queueName, false, consumer);
-
-			Executor executor = null;
-			while (!this.isStop)
+			using(var conn = factory.CreateConnection())
+			using(IModel ch = conn.CreateModel())
 			{
-				BasicDeliverEventArgs args = consumer.Queue.Dequeue();
+				ch.QueueDeclare(this.queueName, false, false, false, null);
+				ch.BasicQos(0, 1, false);
 
-				Request request;
-				using(MemoryStream mem = new MemoryStream(args.Body))
+				var consumer = new QueueingBasicConsumer(ch);
+				ch.BasicConsume(this.queueName, false, consumer);
+
+				Executor executor = null;
+				while (!this.isStop)
 				{
-					request = (Request)binaryFormatter.Deserialize(mem);
-					request.DeliveryTag = args.DeliveryTag;
-				}
-
-				string serviceName = request.ServiceName;
-
-
-				ServiceNode node = config.ServiceNodes.Find(serviceName);
-				if (node != null)
-				{
-					executor = Executor.Run(this, node);
-				}
-
-				if (executor != null)
-				{
-					executor.PushRequest(request);
-				}
-				else
-				{
-					byte[] bytes = null;
-					Response response = new Response();
-
-					BinaryFormatter binaryFormatter = new BinaryFormatter();
-					using (MemoryStream mem = new MemoryStream())
+					try
 					{
-						binaryFormatter.Serialize(mem, response);
-						bytes = mem.ToArray();
+						BasicDeliverEventArgs args = consumer.Queue.Dequeue();
+
+						Request request;
+						using (MemoryStream mem = new MemoryStream(args.Body))
+						{
+							request = (Request)binaryFormatter.Deserialize(mem);
+							request.DeliveryTag = args.DeliveryTag;
+							request.CorrelationId = args.BasicProperties.CorrelationId;
+							request.ReplyTo = args.BasicProperties.ReplyTo;
+						}
+
+						ServiceNode node = config.ServiceNodes.Find(request.ServiceName);
+						if (node != null)
+						{
+							executor = AcquriedExecutor(node);
+							executor.ExecutorService.PushRequest(request);
+						}
+						else
+						{
+							IBasicProperties responseProps = ch.CreateBasicProperties();
+							responseProps.CorrelationId = request.CorrelationId;
+							ch.BasicPublish(string.Empty, request.ReplyTo, responseProps, NotFoundResponseBody);
+
+							LOG.Warn("未找到请求处理服务：" + request.ServiceName);
+						}
+						ch.BasicAck(args.DeliveryTag, false);
 					}
-
-					IBasicProperties responseProps = ch.CreateBasicProperties();
-					responseProps.CorrelationId = request.CorrelationId;
-					ch.BasicPublish(string.Empty, request.ReplyTo, responseProps, bytes);
-
-					LOG.Warn("未找到请求处理服务：" + serviceName);
+					catch (Exception ex)
+					{
+						LOG.Error(ex);
+						break;
+					}
 				}
-
-				ch.BasicAck(args.DeliveryTag, false);
 			}
-
-			conn.Close();
-			ch.Close();
 		}
-
-		private ServiceConfig config;
 	}
 }

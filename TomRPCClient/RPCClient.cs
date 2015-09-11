@@ -11,139 +11,65 @@ using System.Threading;
 
 namespace TomRPCClient
 {
-	public class RPCClient : IDisposable
+	public class RPCClient
 	{
-		const string RoutingKey = "rpc.queue";
-		private string mqUri;
+		private int appId;
+		private IConnection connection;
+		private IModel channel;
+		private string replyQueueName;
+		private QueueingBasicConsumer consumer;
+		private BinaryFormatter binaryFormatter = new BinaryFormatter();
 
-		private readonly ConnectionFactory factory;
-		private readonly IConnection conn;
-		private readonly IModel ch;
-		private readonly string replyQueueName;
-		private readonly QueueingBasicConsumer consumer;
-		private readonly BinaryFormatter binaryFormatter;
-		
-		public RPCClient(string mqUri)
+		public RPCClient(int appId, string mqUri)
 		{
-			this.mqUri = mqUri;
-
-			binaryFormatter = new BinaryFormatter();
-
-			factory = new ConnectionFactory();
-			factory.Uri = this.mqUri;
-
-			conn = factory.CreateConnection();
-			ch = conn.CreateModel();
-
-			replyQueueName = ch.QueueDeclare().QueueName;
-
-			ch.QueueDeclare("tom.host.1", false, false, false, null);
-
-			consumer = new QueueingBasicConsumer(ch);
-			ch.BasicConsume(replyQueueName, true, consumer);
-
+			this.appId = appId;
+			var factory = new ConnectionFactory();
+			factory.Uri = mqUri;
+			connection = factory.CreateConnection();
+			channel = connection.CreateModel();
+			replyQueueName = channel.QueueDeclare().QueueName;
+			consumer = new QueueingBasicConsumer(channel);
+			channel.BasicConsume(queue: replyQueueName,
+								 noAck: true,
+								 consumer: consumer);
 		}
 
-		public IAsyncResult BeginRequest(Request request)
+		public object Invoke(Request request)
 		{
-			request.ReplyTo = replyQueueName;
-			request.CorrelationId = Guid.NewGuid().ToString();
+			var corrId = Guid.NewGuid().ToString();
+			var props = channel.CreateBasicProperties();
+			props.ReplyTo = replyQueueName;
+			props.CorrelationId = corrId;
 
-			byte[] body;
-			using (MemoryStream mem = new MemoryStream())
+			byte[] messageBytes;
+
+			using (MemoryStream ms = new MemoryStream())
 			{
-				binaryFormatter.Serialize(mem, request);
-				body = mem.ToArray();
+				binaryFormatter.Serialize(ms, request);
+				messageBytes = ms.ToArray();
 			}
 
-			ch.BasicPublish(string.Empty, "tom.host.1", null, body);
+			channel.BasicPublish(exchange: "",
+								 routingKey: "tom.app." + this.appId,
+								 basicProperties: props,
+								 body: messageBytes);
 
-			return new RPCAsyncResult(request.CorrelationId, null);
-		}
-
-		public object EndRequest(IAsyncResult asyncResult)
-		{
-			DateTime callTime = DateTime.Now;
-			RPCAsyncResult result = asyncResult as RPCAsyncResult;
 			while (true)
 			{
-				var e = (BasicDeliverEventArgs)consumer.Queue.Dequeue();
-				if (e.BasicProperties.CorrelationId == result.CorrelationId)
+				var ea = (BasicDeliverEventArgs)consumer.Queue.Dequeue();
+				if (ea.BasicProperties.CorrelationId == corrId)
 				{
-					using (MemoryStream mem = new MemoryStream(e.Body))
+					using (MemoryStream ms = new MemoryStream(ea.Body))
 					{
-						return binaryFormatter.Deserialize(mem);
+						return binaryFormatter.Deserialize(ms);
 					}
 				}
-
-				if ((DateTime.Now - callTime).TotalSeconds > 10)
-				{
-					throw new Exception("请求超时!");
-				}
 			}
-		}
-
-		public object Request(Request request)
-		{
-			IAsyncResult asyncResult = BeginRequest(request);
-			return EndRequest(asyncResult);
 		}
 
 		public void Close()
 		{
-			conn.Close();
-		}
-
-		#region IDisposable 成员
-
-		public void Dispose()
-		{
-			this.Close();
-		}
-
-		#endregion
-
-
-		internal class RPCAsyncResult : IAsyncResult
-		{
-			private object thisLock;
-			private object state;
-			private bool completed;
-			public string CorrelationId { get; private set; }
-
-			public RPCAsyncResult(string correlationId, object state)
-			{
-				this.thisLock = new object();
-				this.state = state;
-				this.CorrelationId = correlationId;
-			}
-
-			#region IAsyncResult 成员
-
-			public object AsyncState
-			{
-				get { return this.state; }
-			}
-
-			public System.Threading.WaitHandle AsyncWaitHandle
-			{
-				get 
-				{
-					return null;
-				}
-			}
-
-			public bool CompletedSynchronously
-			{
-				get { throw new NotImplementedException(); }
-			}
-
-			public bool IsCompleted
-			{
-				get { throw new NotImplementedException(); }
-			}
-
-			#endregion
+			connection.Close();
 		}
 	}
 }

@@ -16,11 +16,9 @@ namespace TomExecutor
 {
 	public class Executor : IDisposable
 	{
-		const string ExchangeName = "amq.direct";
 		public bool IsStop { set; get; }
 		private SmartThreadPool smartThreadPool;
 
-		private string serviceName;
 		private string serviceDirectory;
 		private int workerServicePort;
 		private string executorServiceName;
@@ -37,9 +35,8 @@ namespace TomExecutor
 
 		private ServiceHost host;
 
-		public Executor(string serviceName, string serviceDirectory, int workerServicePort, string executorServiceName, string executorServiceIP, int executorServicePort, string mqUri)
+		public Executor(string serviceDirectory, int workerServicePort, string executorServiceName, string executorServiceIP, int executorServicePort, string mqUri)
 		{
-			this.serviceName = serviceName;
 			this.serviceDirectory = serviceDirectory;
 			this.workerServicePort = workerServicePort;
 			this.executorServiceName = executorServiceName;
@@ -83,8 +80,8 @@ namespace TomExecutor
 			Request request = (Request)state;
 
 			byte[] bytes = null;
-			Task task = Task.TryGetTask(serviceName, serviceDirectory);
-			object objRet = task.Run(request);
+			Task task = Task.TryGetTask(request.ServiceName, serviceDirectory);
+			object objRet = task.Execute(request);
 			if (objRet != null)
 			{
 				using (MemoryStream mem = new MemoryStream())
@@ -97,7 +94,6 @@ namespace TomExecutor
 			IBasicProperties responseProps = ch.CreateBasicProperties();
 			responseProps.CorrelationId = request.CorrelationId;
 			ch.BasicPublish(string.Empty, request.ReplyTo, responseProps, bytes);
-			ch.BasicAck(request.DeliveryTag, false);
 			return null;
 		}
 

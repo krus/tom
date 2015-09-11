@@ -20,11 +20,6 @@ namespace TomWorker
 			return base.Channel.AcquireWorker(appId);
 		}
 
-		#endregion
-
-		#region IMasterService 成员
-
-
 		public void Heartbeat(int appId)
 		{
 			base.Channel.Heartbeat(appId);

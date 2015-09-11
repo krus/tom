@@ -11,6 +11,6 @@ namespace TomMasterServiceContract.Entities
 		public int WorkerId { get; set; }
 		public string MQUri { get; set; }
 		public string WorkerServiceName { get; set; }
-		public int WorkerServicePort { get; set; }
+		public string QueueName { get; set; }
 	}
 }

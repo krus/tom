@@ -10,13 +10,19 @@ namespace TomWorker
 {
 	public sealed class NetPort
 	{
-		private static int s_Port = 18000;
-		public static int AcquriedPort()
+		private int startPort;
+
+		public NetPort(int startPort)
+		{
+			this.startPort = startPort;
+		}
+
+		public int AcquriedPort()
 		{
 			int port;
 			do{
-				Interlocked.Increment(ref s_Port);
-				port = s_Port;
+				Interlocked.Increment(ref startPort);
+				port = startPort;
 			} while (PortInUse(port));
 			return port;
 		}

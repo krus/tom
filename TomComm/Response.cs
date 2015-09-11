@@ -8,6 +8,7 @@ namespace TomComm
 	[Serializable]
 	public class Response
 	{
+		public int Status { get; set; }
 		public SortedList<string, object> Parameters { get; set; }
 		public SortedList<string, object> Body;
 	}

@@ -36,7 +36,6 @@ namespace TomWorker
 			int.TryParse(System.Configuration.ConfigurationManager.AppSettings["TomHostId"], out hostId);
 
 			worker = new Worker(hostId);
-			worker.Start();
 		}
 
 		protected override void OnStop()

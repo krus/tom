@@ -13,6 +13,7 @@ namespace TomMasterServiceContract
 		[OperationContract]
 		WorkerInfo AcquireWorker(int appId);
 
+		[OperationContract]
 		void Heartbeat(int appId);
 	}
 }
