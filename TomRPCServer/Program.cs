@@ -12,7 +12,7 @@ namespace TomRPCServer
 		static void Main(string[] args)
 		{
 			var factory = new ConnectionFactory();
-			factory.Uri = "amqp://test:test@115.29.236.46:5672";
+			
 
 			using (var connection = factory.CreateConnection())
 			using (var channel = connection.CreateModel())
